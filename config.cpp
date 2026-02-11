@@ -1,12 +1,30 @@
+/**
+ * ===========================
+ * Synthetics Configuration System
+ * ===========================
+ * 
+ * A comprehensive configuration management system for financial data processing
+ * pipelines. Provides JSON-based configuration with automatic mapping to
+ * strongly-typed C++ structs for NSE derivatives and index data processing.
+ * 
+ * Features:
+ *  - Hierarchical configuration structure with 12 configuration domains
+ *  - JSON file and string-based loading
+ *  - Type-safe struct mapping with defaults
+ *  - Comprehensive error handling and validation
+ *  - Supports complex execution tuning with 41+ parameters
+ */
+
 /*
  * ===========================
  * Standard & Third-Party Includes
  * ===========================
- * iostream      : basic IO utilities
- * string        : std::string support
- * fstream       : file read/write for config loading
- * vector/map    : STL containers used across config objects
- * nlohmann/json : JSON parsing and object mapping
+ * iostream      : standard input/output for logging and errors
+ * string        : std::string for text manipulation
+ * fstream       : file stream for JSON file reading
+ * vector        : std::vector for dynamic arrays
+ * map           : std::map for key-value storage and symbol registries
+ * nlohmann/json : JSON parsing library for configuration deserialization
  */
 #include <iostream>
 #include <string>
@@ -44,53 +62,100 @@ struct market_constants;
  * Central Configuration Class
  * ===========================
  * Acts as a top-level container for all configuration domains.
- * Each pointer corresponds to a logically isolated config module.
+ * Each pointer corresponds to a logically isolated configuration module.
  *
- * Design choice:
- *  - Pointers allow optional sections and late initialization
- *  - JSON parsing is centralized and delegated internally
+ * Design Rationale:
+ *  - Pointers enable optional configuration sections and lazy initialization
+ *  - JSON parsing is centralized and delegated to parse_json()
+ *  - Supports partial configuration loading with NULL for missing sections
+ *  - Memory management: caller is responsible for cleanup
+ *
+ * Public API:
+ *  - load_from_file(): Load configuration from JSON file on disk
+ *  - load_from_string(): Load configuration from in-memory JSON string
+ *  - to_flat_map(): Convert hierarchical config to flat key-value map (if implemented)
  */
 class config {
 public:
-    data_paths* data_paths_config;
-    data_scope* data_scope_config;
-    symbol_registry* symbol_registry_config;
-    symbol_matching* symbol_matching_config;
-    preprocessing* preprocessing_config;
-    acceleration* acceleration_config;        
-    logger* logger_config;
-    export_config* export_config_ptr;
-    stream_logging* stream_logging_config;
-    execution* execution_config;
-    post_compute* post_compute_config;
-    market_constants* market_constants_config;
+    // Configuration pointers for each major domain
+    // Organized by functional area: paths, data scope, symbol handling, 
+    // processing rules, execution tuning, and market constants
+    
+    data_paths* data_paths_config;              // File system paths for data input/output
+    data_scope* data_scope_config;              // Data extraction scope and date ranges
+    symbol_registry* symbol_registry_config;    // Asset-to-symbol mappings per exchange
+    symbol_matching* symbol_matching_config;    // Symbol matching behavior and rules
+    preprocessing* preprocessing_config;        // Data cleaning and aggregation settings
+    acceleration* acceleration_config;          // GPU and hardware acceleration toggles
+    logger* logger_config;                      // Logging verbosity and formatting
+    export_config* export_config_ptr;           // Output file format and compression
+    stream_logging* stream_logging_config;      // Real-time data stream logging
+    execution* execution_config;                // Advanced parallelism and worker tuning
+    post_compute* post_compute_config;          // Post-processing and quantitative transformations
+    market_constants* market_constants_config;  // Market timing, holidays, and constants
 
     config() = default;
 
     /*
      * Load configuration from a JSON file on disk.
-     * Returns false if:
-     *  - file cannot be opened
-     *  - JSON parsing fails
-     *  - required fields are missing
+     * 
+     * Parameters:
+     *  file_name: Path to JSON configuration file
+     * 
+     * Returns:
+     *  true if configuration loaded and parsed successfully
+     *  false if file cannot be opened or JSON parsing fails
+     * 
+     * Error Handling:
+     *  - Logs file open failures to stderr
+     *  - Logs JSON syntax errors with context to stderr
+     *  - Partial failure on missing required fields handled gracefully
      */
     bool load_from_file(const std::string& file_name);
 
     /*
      * Load configuration from an in-memory JSON string.
-     * Useful for:
-     *  - testing
-     *  - remote config injection
-     *  - dynamic runtime overrides
+     * 
+     * Parameters:
+     *  config_str: Valid JSON string containing configuration
+     * 
+     * Returns:
+     *  true if configuration parsed successfully
+     *  false if JSON parsing fails
+     * 
+     * Use Cases:
+     *  - Unit testing without file I/O
+     *  - Remote configuration injection
+     *  - Dynamic runtime configuration overrides
+     *  - Configuration from environment variables
      */
     bool load_from_string(const std::string& config_str);
 
+    /*
+     * Flatten hierarchical configuration to a flat key-value map.
+     * Useful for debugging, logging, and flat configuration outputs.
+     * 
+     * Returns:
+     *  Map of fully-qualified keys (e.g., "data_paths.export_root") to string values
+     */
     std::map<std::string, std::string> to_flat_map() const;
 
 private:
     /*
-     * Core JSON parser.
-     * Maps validated JSON fields into strongly typed config structs.
+     * Core JSON parser and configuration loader.
+     * Maps validated JSON fields into strongly-typed configuration structs.
+     * 
+     * Parameters:
+     *  j: Parsed JSON object from nlohmann/json library
+     * 
+     * Returns:
+     *  true if all recognized configuration sections parsed successfully
+     *  false if critical parsing errors occur
+     * 
+     * Parsing Strategy:
+     *  - Each configuration section is optional; NULL if missing
+     *  - Default values applied at struct declaration level
+     *  - Type coercion applied where needed (e.g., float to int)
      */
     bool parse_json(const json& j);
 };
@@ -98,232 +163,303 @@ private:
 
 
 struct data_paths {
-    std::string derivatives_root;
-    std::string spot_root;
-    std::string export_root;
-    std::string log_root;
+    /**
+     * Paths Configuration Structure
+     * =============================
+     * Defines all file system root directories used for data input/output.
+     * All paths are absolute or relative to the working directory.
+     */
+    
+    std::string derivatives_root;  // Root directory for NFO (futures/options) tick data
+    std::string spot_root;         // Root directory for spot/INDEX tick data
+    std::string export_root;       // Output directory for processed/transformed data
+    std::string log_root;          // Directory for application logs and diagnostics
 };
 /*
  * ===========================
  * Data Scope Configuration
  * ===========================
- * Defines raw data input paths and output/log directories.
- * Typically used by data ingestion pipelines.
+ * Defines the scope and range of data to be extracted and processed.
+ * Controls which underlyings, date ranges, and instrument types are included.
  */
 struct data_scope {
-    std::vector<std::string> underlyings;
-    std::string date_from;
-    std::string date_to;
-    std::vector<std::string> instrument_classes;
-    int expiry_limit = 0;  // Default to 0 as per comment
+    std::vector<std::string> underlyings;      // Assets to process (e.g., ["NIFTY", "BANKNIFTY"])
+    std::string date_from;                     // Start date for data extraction (YYYY-MM-DD)
+    std::string date_to;                       // End date for data extraction (YYYY-MM-DD)
+    std::vector<std::string> instrument_classes; // Types of instruments: options, futures, index
+    int expiry_limit = 0;                      // Max expiries per underlying (0 = unlimited)
 };
 
 /*
  * ===========================
  * Symbol Registry Configuration
  * ===========================
- * Maps logical asset identifiers to exchange-specific symbols.
- * Nested maps allow multi-exchange or multi-instrument mapping.
+ * Maps logical asset identifiers to exchange-specific trading symbols.
+ * Supports multi-level nesting for different instrument types and exchanges.
+ * Example: "NIFTY" -> {"options_symbol": "NIFTY", "futures_symbol": "NIFTY", "index_symbol": "NIFTY 50"}
  */
 struct symbol_registry {
-    std::map<std::string, std::map<std::string, std::string>> mappings;
+    std::map<std::string, std::map<std::string, std::string>> mappings;  // Asset -> {symbol_type -> actual_symbol}
 };
 
 /*
  * ===========================
  * Symbol Matching Rules
  * ===========================
- * Controls how futures/options/index instruments are matched.
- * Affects symbol normalization and lookup behavior.
+ * Controls symbol matching behavior, normalization, and lookup strategies.
+ * Affects how instrument symbols are compared and standardized across the system.
  */
 struct symbol_matching {
-    std::string options_mode;
-    std::string futures_mode;
-    std::string index_mode;
-    bool is_case_sensitive;
-    bool trim_whitespace;
+    std::string options_mode;      // Matching strategy for options: "exact", "prefix", "fuzzy", etc.
+    std::string futures_mode;      // Matching strategy for futures
+    std::string index_mode;        // Matching strategy for index instruments
+    bool is_case_sensitive;        // Case-sensitive symbol comparison
+    bool trim_whitespace;          // Remove leading/trailing whitespace from symbols
 };
 
 /*
  * ===========================
  * Preprocessing Rules
  * ===========================
- * Defines data-cleaning and aggregation behaviors.
+ * Defines data quality and aggregation transformations applied during processing.
+ * Controls how missing data is handled and how daily partitions are combined.
  */
 struct preprocessing {
-    bool backward_fill;         // backward fill missing values
-    bool forward_fill;          // forward fill missing values
-    bool ignore_empty_files;    // ignore zero-row datasets
-    bool merge_daily_outputs;   // merge daily partitions
+    bool backward_fill;         // Fill missing values with previous available value
+    bool forward_fill;          // Fill missing values with next available value
+    bool ignore_empty_files;    // Skip files with zero rows or no data
+    bool merge_daily_outputs;   // Combine daily partitions into single output
 };
 
 /*
  * ===========================
  * Acceleration Configuration
  * ===========================
- * Toggles GPU kernel acceleration where available.
+ * Hardware acceleration settings for GPU-based processing where available.
+ * Requires compatible GPU and CUDA toolkit for effective operation.
  */
 struct acceleration {
-    bool enable_gpu;
+    bool enable_gpu;  // Enable GPU kernel acceleration (requires CUDA toolkit)
 };
 
 /*
  * ===========================
  * Logger Configuration
  * ===========================
- * Controls verbosity, formatting, and timestamp styles.
+ * Controls logging verbosity, output destinations, and formatting.
+ * Supports separate log levels for console and file outputs.
  */
 struct logger {
-    std::string stdout_level;
-    std::string file_log_level;
-    std::string log_template;
-    std::string timestamp_format;
+    std::string stdout_level;     // Console log level: DEBUG, INFO, WARNING, ERROR
+    std::string file_log_level;   // File log level: DEBUG, INFO, WARNING, ERROR
+    std::string log_template;     // Log message format string (e.g., "%(asctime)s - %(levelname)s - %(message)s")
+    std::string timestamp_format; // Timestamp format string (e.g., "%Y-%m-%d %H:%M:%S")
 };
 
 /*
  * ===========================
  * Export Configuration
  * ===========================
- * Defines final data serialization format and compression.
+ * Defines final output file format and compression strategy.
+ * Parquet is recommended for performance (5-10x faster read/write, 3-5x smaller files vs CSV).
  */
 struct export_config {
-    std::string file_format;
-    std::string codec;
+    std::string file_format;  // Output format: parquet, csv, arrow, etc.
+    std::string codec;        // Compression algorithm: snappy, gzip, lz4, brotli, zstd
 };
 
 /*
  * ===========================
  * Stream Logging Configuration
  * ===========================
- * Optional fine-grained data snapshots for debugging/audit.
+ * Optional real-time data stream logging for debugging and audit trails.
+ * Captures intermediate data snapshots during processing pipelines.
  */
 struct stream_logging {
-    bool is_enabled;
-    std::string stream_log_root;
-    std::vector<std::string> output_formats;
+    bool is_enabled;                          // Enable/disable stream logging
+    std::string stream_log_root;              // Directory for stream log files
+    std::vector<std::string> output_formats;  // Output formats: arrow_ipc, jsonl, parquet, etc.
 };
 
 /*
  * ===========================
  * Execution / Performance Controls
  * ===========================
- * High-granularity control over:
- *  - parallelism
- *  - batching
- *  - memory usage
- *  - worker scaling
- *
- * Defaults are aggressive and assume server-grade hardware.
+ * Advanced tuning with 41+ parameters for fine-grained control over:
+ *  - Parallelism strategy and scope (days, assets, files)
+ *  - Worker thread management and scaling
+ *  - Memory efficiency and resource constraints
+ *  - Batch sizing for specialized engines (fill, greeks, futures, TTE)
+ * 
+ * Default values assume server-grade hardware with multiple cores and
+ * sufficient memory. Adjust for resource-constrained environments.
+ * 
+ * Performance Guidelines:
+ *  - CPU-bound: Increase worker counts, disable low_memory_mode
+ *  - Memory-constrained: Enable low_memory_mode, reduce chunk sizes
+ *  - Multi-core systems: Enable parallelism flags, increase worker caps
+ *  - Single-core: Disable parallelism, use single worker threads
  */
 struct execution {
-    int io_chunk_size = 0;  // 0 treated as null / auto
-    bool low_memory_mode = false;
-    bool enable_parallelism = true;
-    int global_worker_cap = 10;
-    bool parallelize_days = true;
-    int day_worker_cap = 10;
-    bool batch_days_mode = true;
-    int days_per_batch = 5;
-    int ram_limited_day_workers = 5;
-    bool parallelize_assets = false;
-    int asset_worker_cap = 10;
-    int total_worker_cap = 10;
-    bool parallel_file_io = true;
-    int file_worker_cap = 10;
-    bool zip_streaming_mode = false;
-    bool process_pool_csv = true;
-    bool parallel_fill_engine = true;
-    bool multiprocess_fill_engine = true;
-    int fill_worker_cap = 10;
-    int fill_batch_size = 50;
-    bool auto_scale_fill_workers = true;
-    bool parallel_monthly_engine = true;
-    int monthly_worker_cap = 10;
-    bool parallel_futures_engine = true;
-    int futures_worker_cap = 10;
-    bool parallel_greeks_engine = true;
-    int greeks_worker_cap = 10;
-    int greeks_block_size = 100000;
-    int transform_worker_cap = 10;
-    int transform_block_size = 1000;
-    bool parallel_tte_engine = true;
-    int tte_worker_cap = 10;
-    int tte_block_size = 500000;
-    bool parallel_synthetic_futures = true;
-    int syn_fut_worker_cap = 10;
-    int syn_fut_block_size = 500000;
-    bool use_memory_controller = false;
-    bool disable_memory_controller = true;
-    bool cache_monthly_expiry_set = true;
-    bool omit_spot_iv = false;
-    int batch_scaling_factor = 4; 
+    // Core I/O and Memory Settings
+    int io_chunk_size = 0;                          // Chunk size for file I/O (0 = auto)
+    bool low_memory_mode = false;                   // Trade performance for lower memory usage
+    
+    // Global Parallelism Control
+    bool enable_parallelism = true;                 // Master switch for all parallel processing
+    int global_worker_cap = 10;                     // Global maximum worker threads across all engines
+    
+    // Day-level Parallelism
+    bool parallelize_days = true;                   // Process multiple trading days in parallel
+    int day_worker_cap = 10;                        // Max workers for day-level parallelism
+    bool batch_days_mode = true;                    // Group days into batches for processing
+    int days_per_batch = 5;                         // Number of days per processing batch
+    int ram_limited_day_workers = 5;                // Workers with stricter memory limits
+    
+    // Asset-level Parallelism
+    bool parallelize_assets = false;                // Process multiple assets in parallel (typically disabled)
+    int asset_worker_cap = 10;                      // Max workers for asset-level parallelism
+    
+    // File-level Parallelism
+    int total_worker_cap = 10;                      // Total worker cap across all parallelism types
+    bool parallel_file_io = true;                   // Parallel file reading operations
+    int file_worker_cap = 10;                       // Max workers for file I/O operations
+    
+    // Specialized I/O Strategies
+    bool zip_streaming_mode = false;                // Stream ZIP files instead of full extraction
+    bool process_pool_csv = true;                   // Use process pool for CSV parsing
+    
+    // Fill Engine Configuration
+    bool parallel_fill_engine = true;               // Parallelize ticker fill operations
+    bool multiprocess_fill_engine = true;           // Use multiprocessing for fills
+    int fill_worker_cap = 10;                       // Max workers for fill engine
+    int fill_batch_size = 50;                       // Rows per batch in fill operations
+    bool auto_scale_fill_workers = true;            // Auto-scale fill workers based on load
+    
+    // Monthly Processing
+    bool parallel_monthly_engine = true;            // Parallelize monthly data aggregation
+    int monthly_worker_cap = 10;                    // Max workers for monthly processing
+    
+    // Futures Processing
+    bool parallel_futures_engine = true;            // Parallelize futures calculations
+    int futures_worker_cap = 10;                    // Max workers for futures processing
+    
+    // Greeks Calculation (Option Greeks: Delta, Gamma, Vega, Theta, Rho)
+    bool parallel_greeks_engine = true;             // Parallelize Greeks calculations
+    int greeks_worker_cap = 10;                     // Max workers for Greeks calculations
+    int greeks_block_size = 100000;                 // Rows per block in Greeks calculations
+    
+    // Ticker Transform
+    int transform_worker_cap = 10;                  // Max workers for ticker transformations
+    int transform_block_size = 1000;                // Rows per block in transformations
+    
+    // Time-to-Expiry (TTE) Calculation
+    bool parallel_tte_engine = true;                // Parallelize time-to-expiry calculations
+    int tte_worker_cap = 10;                        // Max workers for TTE calculations
+    int tte_block_size = 500000;                    // Rows per block in TTE calculations
+    
+    // Synthetic Futures
+    bool parallel_synthetic_futures = true;         // Parallelize synthetic futures calculations
+    int syn_fut_worker_cap = 10;                    // Max workers for synthetic futures
+    int syn_fut_block_size = 500000;                // Rows per block in synthetic futures
+    
+    // Memory Management
+    bool use_memory_controller = false;             // Enable memory controller for explicit management
+    bool disable_memory_controller = true;          // Disable memory controller (inverse flag)
+    
+    // Caching and Optimization
+    bool cache_monthly_expiries = true;             // Cache computed monthly expiry sets
+    bool omit_spot_iv = false;                      // Skip spot IV calculation (faster, less accurate)
+    
+    // Batch Scaling
+    int batch_scaling_factor = 4;                   // Multiplier for dynamic batch sizing
+}; 
 };
 
 /*
  * ===========================
  * Post-Compute Controls
  * ===========================
- * Optional quantitative transformations applied after base processing.
+ * Optional quantitative transformations applied after base data processing.
+ * These computationally intensive operations are applied selectively based on use case.
  */
 struct post_compute {
-    bool compute_synthetic_futures = false;
-    bool recompute_theoretical_greeks = false;
+    bool compute_synthetic_futures = false;  // Calculate synthetic futures contracts from options data
+    bool recompute_theoretical_greeks = false; // Recalculate option Greeks using pricing models
 };
 
 /*
  * ===========================
  * Market Constants
  * ===========================
- * Market-wide constants, calendars, and time rules.
- * Shared across all processing stages.
+ * Market-wide constants, trading calendars, and time rules.
+ * Shared across all processing stages and used for:
+ *  - Time-to-expiry calculations
+ *  - Trading calendar normalization
+ *  - Market hours computation
+ *  - Holiday accounting
  */
 struct market_constants {
-    std::vector<std::string> valid_underlyings;
-    std::vector<std::string> symbol_exceptions;
-    std::vector<int> expiry_cutoff_time;
-    std::map<std::string, std::string> calendar_month_map;
-    std::map<std::string, std::string> numeric_month_map;
-    std::map<std::string, std::string> alpha_month_map;
-
+    // Valid Assets and Exception Handling
+    std::vector<std::string> valid_underlyings;    // List of supported assets (NIFTY, BANKNIFTY, etc.)
+    std::vector<std::string> symbol_exceptions;    // Assets with special naming conventions (BAJAJ-AUTO, M&M, etc.)
+    
+    // Expiry Configuration
+    std::vector<int> expiry_cutoff_time;           // Market close time for expiry [HH, MM, SS]
+    
+    // Month Mapping Tables
+    std::map<std::string, std::string> calendar_month_map;  // Calendar months: JAN->01, FEB->02, etc.
+    std::map<std::string, std::string> numeric_month_map;   // Numeric months: 1->01, 01->01, etc.
+    std::map<std::string, std::string> alpha_month_map;     // Single letter months: O->10, N->11, D->12
+    
     /*
-     * Market timing parameters used in time-to-expiry,
-     * trading calendar normalization, and simulations.
+     * Market Timing and Calendar
+     * ==========================
+     * Trading hours and session information for market time calculations.
      */
     struct marketTiming {
-        std::string session_open;
-        std::string session_close;
-        int minutes_per_session;
-        int sessions_per_year;
+        std::string session_open;           // Market open time (HH:MM:SS)
+        std::string session_close;          // Market close time (HH:MM:SS)
+        int minutes_per_session;            // Trading minutes per session
+        int sessions_per_year;              // Trading sessions per year (typically 252)
     } market_timing;
 
-    std::vector<std::string> exchange_holidays;
+    std::vector<std::string> exchange_holidays;    // Non-trading dates in YYYY-MM-DD format
 };
 
 bool config::load_from_file(const std::string& file_name){
+    // Attempt to open the configuration JSON file
     std::ifstream file(file_name);
     if (!file.is_open()) {
         std::cerr<<"Failed to open the config file: "<< file_name << std::endl;
         return false;
-    };
+    }
+    
+    // Parse JSON from file stream
     json j;
     try{
         file>>j;
     } catch (const json::parse_error& e){
-        std::cerr<<"Json parse text: "<<e.what()<<std::endl;
+        std::cerr<<"JSON parse error: "<<e.what()<<std::endl;
         return false;
     }
+    
+    // Delegate to core parser
     return parse_json(j);
 };
 
 
 bool config::load_from_string(const std::string& config_string){
+    // Parse JSON from in-memory string
     json j;
     try {
         j = json::parse(config_string);
     } catch (const json::parse_error& e) {
-        std::cerr << "Json paring error coming from 'config.json': " <<e.what()<<std::endl;
+        std::cerr << "JSON parsing error from config string: " <<e.what()<<std::endl;
         return false;
     }
+    
+    // Delegate to core parser
     return parse_json(j); 
 };
 
@@ -475,7 +611,7 @@ bool config::parse_json(const json& j){
             a->syn_fut_block_size = ar.value("syn_fut_block_size", a->syn_fut_block_size);
             a->use_memory_controller = ar.value("use_memory_controller", a->use_memory_controller);
             a->disable_memory_controller = ar.value("disable_memory_controller", a->disable_memory_controller);
-            a->cache_monthly_expiry_set = ar.value("cache_monthly_expiry_set", a->cache_monthly_expiry_set);
+            a->cache_monthly_expiries = ar.value("cache_monthly_expiries", a->cache_monthly_expiries);
             a->omit_spot_iv = ar.value("omit_spot_iv", a->omit_spot_iv);
             a->batch_scaling_factor = ar.value("batch_scaling_factor", a->batch_scaling_factor);
             this->execution_config = a;
@@ -529,18 +665,27 @@ bool config::parse_json(const json& j){
     }
 };
 
-// Simple CLI runner to load and display a compact summary of the config
+// ===========================
+// Simple CLI Runner
+// ===========================
+// Demonstrates basic configuration loading and displays a summary of loaded settings.
+// Usage: ./config_parser [config_file.json]
 int main(int argc, char** argv){
+    // Determine configuration file to load
     std::string cfg_file = "config.json";
     if (argc > 1) cfg_file = argv[1];
 
+    // Instantiate and load configuration
     config cfg;
     if (!cfg.load_from_file(cfg_file)){
         std::cerr<<"Failed to load configuration from "<<cfg_file<<std::endl;
         return 1;
     }
 
+    // Display loaded configuration summary
     std::cout<<"Configuration loaded from: "<<cfg_file<<"\n";
+    
+    // Display data_paths configuration
     if (cfg.data_paths_config){
         std::cout<<"Paths:\n";
         std::cout<<" - derivatives_root: "<<cfg.data_paths_config->derivatives_root<<"\n";
@@ -549,15 +694,17 @@ int main(int argc, char** argv){
         std::cout<<" - log_root: "<<cfg.data_paths_config->log_root<<"\n";
     }
 
+    // Display data_scope configuration
     if (cfg.data_scope_config){
-        std::cout<<"Extraction:\n";
+        std::cout<<"Data Scope:\n";
         std::cout<<" - underlyings count: "<<cfg.data_scope_config->underlyings.size()<<"\n";
         std::cout<<" - date_from: "<<cfg.data_scope_config->date_from<<"\n";
         std::cout<<" - date_to: "<<cfg.data_scope_config->date_to<<"\n";
     }
 
+    // Display symbol_registry configuration
     if (cfg.symbol_registry_config){
-        std::cout<<"Asset mappings groups: "<<cfg.symbol_registry_config->mappings.size()<<"\n";
+        std::cout<<"Symbol Registry Groups: "<<cfg.symbol_registry_config->mappings.size()<<"\n";
     }
 
     std::cout<<"Done."<<std::endl;

@@ -5,7 +5,8 @@
  * 
  * A comprehensive configuration management system for financial data processing
  * pipelines. Provides JSON-based configuration with automatic mapping to
- * strongly-typed C++ structs for NSE derivatives and index data processing.
+ * strongly-typed C++ structs for derivatives and index data processing across
+ * multiple markets.
  * 
  * Features:
  *  - Hierarchical configuration structure with 12 configuration domains
@@ -180,10 +181,10 @@ struct data_paths {
  * Data Scope Configuration
  * ===========================
  * Defines the scope and range of data to be extracted and processed.
- * Controls which underlyings, date ranges, and instrument types are included.
+ * Controls which assets, date ranges, and instrument types are included.
  */
 struct data_scope {
-    std::vector<std::string> underlyings;      // Assets to process (e.g., ["NIFTY", "BANKNIFTY"])
+    std::vector<std::string> underlyings;      // Assets/symbols to process (market-agnostic)
     std::string date_from;                     // Start date for data extraction (YYYY-MM-DD)
     std::string date_to;                       // End date for data extraction (YYYY-MM-DD)
     std::vector<std::string> instrument_classes; // Types of instruments: options, futures, index
@@ -196,7 +197,7 @@ struct data_scope {
  * ===========================
  * Maps logical asset identifiers to exchange-specific trading symbols.
  * Supports multi-level nesting for different instrument types and exchanges.
- * Example: "NIFTY" -> {"options_symbol": "NIFTY", "futures_symbol": "NIFTY", "index_symbol": "NIFTY 50"}
+ * Example: "ASSET1" -> {"options_symbol": "OPT_SYMBOL", "futures_symbol": "FUT_SYMBOL", "index_symbol": "IDX_SYMBOL"}
  */
 struct symbol_registry {
     std::map<std::string, std::map<std::string, std::string>> mappings;  // Asset -> {symbol_type -> actual_symbol}
@@ -401,8 +402,8 @@ struct post_compute {
  */
 struct market_constants {
     // Valid Assets and Exception Handling
-    std::vector<std::string> valid_underlyings;    // List of supported assets (NIFTY, BANKNIFTY, etc.)
-    std::vector<std::string> symbol_exceptions;    // Assets with special naming conventions (BAJAJ-AUTO, M&M, etc.)
+    std::vector<std::string> valid_underlyings;    // List of supported assets
+    std::vector<std::string> symbol_exceptions;    // Assets with special naming or formatting conventions
     
     // Expiry Configuration
     std::vector<int> expiry_cutoff_time;           // Market close time for expiry [HH, MM, SS]

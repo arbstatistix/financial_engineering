@@ -1,10 +1,18 @@
 # Synthetics Configuration System
 
-A comprehensive C++ configuration management system for financial data processing pipelines, specifically designed for derivatives and index data handling.
+A comprehensive C++ configuration management system for financial data processing pipelines, designed for derivatives and index data handling across multiple markets.
 
 ## Overview
 
-This project provides a robust, hierarchical configuration framework that maps JSON-based settings to strongly-typed C++ structs. It's built for processing NSE (National Stock Exchange) financial instruments including options, futures, and index data.
+This project provides a robust, hierarchical configuration framework that maps JSON-based settings to strongly-typed C++ structs. It supports processing of financial instruments including options, futures, and index data.
+
+### Upcoming Features
+
+**File Generation System** (Coming in the next few weeks)
+- The system will read configuration files and automatically generate corresponding data processing files
+- Dynamic file creation based on configuration parameters
+- Automatic schema generation and initialization
+- Extensible architecture for custom file types
 
 ## Project Structure
 
@@ -28,22 +36,22 @@ synthetics/
 
 ### 1. **Data Paths** (`data_paths`)
 Defines root directories for data storage and output.
-- `derivatives_root`: Path to NFO (futures/options) data
-- `spot_root`: Path to INDEX data
+- `derivatives_root`: Path to derivatives (futures/options) data
+- `spot_root`: Path to spot/index data
 - `export_root`: Output directory for processed data
 - `log_root`: Directory for application logs
 
 ### 2. **Data Scope** (`data_scope`)
 Specifies what data to process.
-- `underlyings`: List of assets to process (e.g., ["NIFTY"])
+- `underlyings`: List of assets/symbols to process (e.g., ["ASSET1", "ASSET2"])
 - `date_from`, `date_to`: Date range for processing
-- `instrument_classes`: Types of instruments (options, futures, index)
+- `instrument_classes`: Types of instruments (options, futures, index, etc.)
 - `expiry_limit`: Maximum number of expiries to keep
 
 ### 3. **Symbol Registry** (`symbol_registry`)
 Maps logical asset names to exchange-specific symbols.
 - Supports nested mappings for different instrument types
-- Example: NIFTY → options_symbol, futures_symbol, index_symbol
+- Example: ASSET1 → options_symbol, futures_symbol, index_symbol
 
 ### 4. **Symbol Matching** (`symbol_matching`)
 Controls symbol normalization and matching behavior.
@@ -94,10 +102,10 @@ Post-processing transformations.
 ### 12. **Market Constants** (`market_constants`)
 Market-wide constants and trading information.
 - `valid_underlyings`: List of supported assets
-- `symbol_exceptions`: Assets with special naming rules
+- `symbol_exceptions`: Assets with special naming or formatting rules
 - `expiry_cutoff_time`: Expiry time as [hours, minutes, seconds]
 - Month mapping tables: Calendar, numeric, and alpha representations
-- `trading_schedule`: Market hours and trading days per year
+- `trading_schedule`: Market hours and trading sessions per year
 - `exchange_holidays`: List of non-trading dates
 
 ## Building and Running
@@ -194,12 +202,12 @@ The `execution` section contains 41 parameters for fine-tuning performance:
 ```json
 {
   "data_paths": {
-    "derivatives_root": "./data/nfo",
+    "derivatives_root": "./data/derivatives",
     "spot_root": "./data/spot",
     "export_root": "./output"
   },
   "data_scope": {
-    "underlyings": ["NIFTY"],
+    "underlyings": ["ASSET1", "ASSET2"],
     "date_from": "2023-01-01",
     "date_to": "2023-12-31"
   }
@@ -228,6 +236,23 @@ When modifying configuration:
 3. Document new parameters in this README
 4. Test with various JSON inputs
 5. Ensure backward compatibility where possible
+6. Keep documentation market-agnostic with generic examples
+
+## Roadmap
+
+**Phase 1 (Current)**: Configuration framework and JSON parsing
+
+**Phase 2 (Coming in next few weeks)**: 
+- File generation system
+- Dynamic schema creation
+- Automatic file initialization based on configuration
+- Support for custom file types and formats
+
+**Phase 3 (Future)**:
+- Configuration validation schemas
+- Migration tools for configuration updates
+- Web UI for configuration management
+- Configuration versioning and rollback
 
 ## License
 

@@ -5,12 +5,14 @@
 ### 1. README.md
 A comprehensive guide covering:
 - Project overview and features
+- Upcoming file generation system (coming in next few weeks)
 - Configuration domain descriptions (all 12 major sections)
 - Building and running instructions
 - Usage examples (minimal and high-performance configs)
 - Performance tuning guidelines
 - Dependency information
 - Error handling documentation
+- Project roadmap with three phases
 
 ### 2. config.cpp - Enhanced with Comments
 Added extensive documentation throughout:
@@ -52,6 +54,15 @@ Added extensive documentation throughout:
 4. **Usage Comments**: Examples of what values are expected and use cases
 5. **Performance Comments**: Guidelines for tuning based on hardware constraints
 6. **Reference Comments**: Linking JSON keys to struct members
+7. **Market-Agnostic Comments**: Generic examples without market-specific references
+
+## Generic Documentation Approach
+
+All documentation has been updated to be market-agnostic:
+- Removed market-specific names (NSE, NIFTY, BANKNIFTY, INDEX, etc.)
+- Used generic terminology (assets, underlyings, symbols)
+- Provided generic examples (ASSET1, ASSET2, OPT_ASSET1, etc.)
+- Applies to any financial market or exchange
 
 ## Configuration Domains Documented
 
@@ -91,9 +102,17 @@ Added extensive documentation throughout:
 
 ## Next Steps
 
-To further enhance the documentation, consider:
+### Upcoming Features (Next Few Weeks)
+The system will be extended with:
+- **File Generation Module**: Automatically generate data processing files based on configuration
+- **Schema Creation**: Dynamic schema generation for configured data types
+- **File Initialization**: Automatic initialization of output files and directories
+- **Custom File Types**: Support for various file formats and structures
+
+### To further enhance the documentation, consider:
 - Adding inline code examples for each configuration section
 - Creating a configuration validation schema
 - Adding unit tests with documented test cases
-- Creating migration guides from old to new configuration format
+- Creating migration guides for configuration updates
 - Adding JSON schema definition file for IDE support
+- Documentation for the upcoming file generation system
